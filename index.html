@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Family Devotional</title>
+<style>
+  :root { --accent: #4b3f72; --bg: #f7f5f2; --card: #ffffff; --text: #2b2b2b; --muted: #7a7a7a; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 0 0 40px 0; }
+  header { background: #1c1c24; color: white; padding: 28px 20px 22px 20px; text-align: center; }
+  header .title { font-size: 24px; font-weight: 800; letter-spacing: 0.02em; }
+  header .verse { font-size: 14px; font-style: italic; margin-top: 10px; opacity: 0.9; }
+  header .verse-ref { font-size: 12px; opacity: 0.7; margin-top: 4px; }
+  .container { max-width: 520px; margin: 0 auto; padding: 20px 16px; }
+  .card { background: var(--card); border-radius: 14px; padding: 18px 20px; margin-bottom: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .card h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 12px 0; }
+  .streak-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee; }
+  .streak-row:last-child { border-bottom: none; }
+  .streak-row .name { font-weight: 600; }
+  .streak-row .num { font-weight: 800; color: var(--accent); }
+  .streak-row .total { font-size: 11px; color: var(--muted); }
+  .pr-item { padding: 10px 0; border-bottom: 1px solid #eee; }
+  .pr-item:last-child { border-bottom: none; }
+  .pr-text { font-size: 14px; margin-bottom: 4px; }
+  .pr-meta { font-size: 11px; color: var(--muted); }
+  .pr-actions { display: flex; gap: 10px; margin-top: 6px; }
+  .pr-actions button { font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid #ccc; background: white; cursor: pointer; }
+  .praying-list { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .item { padding: 10px 0; border-bottom: 1px solid #eee; }
+  .item:last-child { border-bottom: none; }
+  .item .who { font-weight: 700; font-size: 13px; }
+  .item .txt { font-size: 14px; margin-top: 2px; }
+  .item img, .item audio { margin-top: 8px; max-width: 100%; border-radius: 8px; }
+  textarea, input[type=text] { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; font-family: inherit; resize: vertical; }
+  select { padding: 8px; border-radius: 8px; border: 1px solid #ccc; font-size: 14px; width: 100%; margin-bottom: 8px; }
+  .form-row { margin-top: 10px; }
+  .submit-btn { margin-top: 8px; padding: 10px 16px; border: none; border-radius: 8px; background: var(--accent); color: white; font-weight: 700; cursor: pointer; font-size: 14px; }
+  .empty { color: var(--muted); font-size: 13px; font-style: italic; }
+  .archive-toggle { font-size: 12px; color: var(--accent); cursor: pointer; margin-top: 10px; display: inline-block; }
+  .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .error-box { color: #a33; text-align: left; padding: 20px; }
+</style>
+</head>
+<body>
+  <div id="app"><div class="loading">Loading family page…</div></div>
+
+  <script>
+    const PEOPLE = ["Dad","Mom","Preston","Jocelyn","Lillie","Lydia","Gabriel","Alexis","Abel"];
+
+    function showError(msg) {
+      document.getElementById('app').innerHTML =
+        '<div class="loading error-box"><strong>Something went wrong:</strong><br><br>' + msg + '<br><br>Send this message to Claude to get it fixed.</div>';
+    }
+
+    function render(data) {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <header>
+          <div class="title">Our Family</div>
+          <div class="verse">"${data.familyVerse.text}"</div>
+          <div class="verse-ref">${data.familyVerse.reference}</div>
+        </header>
+        <div class="container">
+          <div class="card">
+            <h3>Streaks (${data.streaks.familyActiveToday}/${data.streaks.people.length} active today)</h3>
+            ${data.streaks.people.map(p => `
+              <div class="streak-row">
+                <div class="name">${p.name}</div>
+                <div style="text-align:right">
+                  <div class="num">${p.streak} 🔥</div>
+                  <div class="total">${p.total} total days</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="card">
+            <h3>Prayer Requests</h3>
+            ${data.prayerRequests.length ? data.prayerRequests.map(pr => `
+              <div class="pr-item">
+                <div class="pr-text">${pr.text}</div>
+                <div class="pr-meta">${pr.requester} &middot; ${pr.dateAdded}</div>
+                <div class="pr-actions">
+                  <button onclick="pray('${pr.id}')">🙏 I'm praying</button>
+                  <button onclick="resolvePR('${pr.id}')">No longer needed</button>
+                </div>
+                ${pr.prayingNames.length ? `<div class="praying-list">Praying: ${pr.prayingNames.join(', ')}</div>` : ''}
+              </div>
+            `).join('') : '<div class="empty">No active prayer requests right now.</div>'}
+
+            <div class="form-row">
+              <select id="prPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              <textarea id="prText" rows="2" placeholder="Add a prayer request..."></textarea>
+              <button class="submit-btn" onclick="submitPR()">Add Prayer Request</button>
+            </div>
+            <span class="archive-toggle" onclick="loadArchive()">View archived requests</span>
+            <div id="archiveBox"></div>
+          </div>
+
+          <div class="card">
+            <h3>Praise Reports</h3>
+            ${data.praiseReports.length ? data.praiseReports.map(p => `
+              <div class="item">
+                <div class="who">${p.name} &middot; <span style="font-weight:400;color:var(--muted)">${p.dateAdded}</span></div>
+                <div class="txt">${p.text}</div>
+              </div>
+            `).join('') : '<div class="empty">No praise reports yet.</div>'}
+
+            <div class="form-row">
+              <select id="przPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              <textarea id="przText" rows="2" placeholder="Share a praise report..."></textarea>
+              <button class="submit-btn" onclick="submitPraise()">Add Praise Report</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <h3>God Moments</h3>
+            ${data.godMoments.length ? data.godMoments.map(g => `
+              <div class="item">
+                <div class="who">${g.name} &middot; <span style="font-weight:400;color:var(--muted)">${g.dateAdded}</span></div>
+                ${g.text ? `<div class="txt">${g.text}</div>` : ''}
+                ${g.mediaType === 'photo' ? `<img src="${g.mediaUrl}">` : ''}
+                ${g.mediaType === 'audio' ? `<audio controls src="${g.mediaUrl}"></audio>` : ''}
+              </div>
+            `).join('') : '<div class="empty">No God moments shared yet.</div>'}
+
+            <div class="form-row">
+              <select id="gmPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              <textarea id="gmText" rows="2" placeholder="What did God show you today? (optional if attaching photo/audio)"></textarea>
+              <input type="file" id="gmFile" accept="image/*,audio/*" style="margin-top:8px">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Photos/audio must be under ~800KB.</div>
+              <button class="submit-btn" onclick="submitGodMoment()">Share God Moment</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function reload() {
+      fetch('/api/family-data')
+        .then(r => r.json())
+        .then(render)
+        .catch(e => showError(e.message));
+    }
+
+    function pray(id) {
+      const person = prompt("Who's praying? (enter your name)");
+      if (!person) return;
+      fetch('/api/prayer-pray', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id, person })
+      }).then(reload).catch(e => showError(e.message));
+    }
+
+    function resolvePR(id) {
+      fetch('/api/prayer-resolve', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id })
+      }).then(reload).catch(e => showError(e.message));
+    }
+
+    function submitPR() {
+      const person = document.getElementById('prPerson').value;
+      const text = document.getElementById('prText').value.trim();
+      if (!text) return;
+      fetch('/api/prayer-add', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ person, text })
+      }).then(reload).catch(e => showError(e.message));
+    }
+
+    function submitPraise() {
+      const person = document.getElementById('przPerson').value;
+      const text = document.getElementById('przText').value.trim();
+      if (!text) return;
+      fetch('/api/praise-add', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ person, text })
+      }).then(reload).catch(e => showError(e.message));
+    }
+
+    function submitGodMoment() {
+      const person = document.getElementById('gmPerson').value;
+      const text = document.getElementById('gmText').value.trim();
+      const fileInput = document.getElementById('gmFile');
+      const file = fileInput.files[0];
+
+      const post = (mediaBase64, mediaMimeType, mediaType) => {
+        fetch('/api/godmoment-add', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ person, text, mediaBase64, mediaMimeType, mediaType })
+        })
+          .then(r => r.json())
+          .then(res => { if (res.error) { alert(res.error); } else { reload(); } })
+          .catch(e => showError(e.message));
+      };
+
+      if (!file) {
+        if (!text) return;
+        post(null, null, null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = function() {
+        const base64 = reader.result.split(',')[1];
+        const mediaType = file.type.startsWith('image') ? 'photo' : 'audio';
+        post(base64, file.type, mediaType);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function loadArchive() {
+      fetch('/api/prayer-archived')
+        .then(r => r.json())
+        .then(list => {
+          const box = document.getElementById('archiveBox');
+          box.innerHTML = list.length
+            ? list.map(pr => `<div class="pr-item"><div class="pr-text">${pr.text}</div><div class="pr-meta">${pr.requester} &middot; added ${pr.dateAdded}, archived ${pr.archivedDate}</div></div>`).join('')
+            : '<div class="empty">No archived requests.</div>';
+        })
+        .catch(e => showError(e.message));
+    }
+
+    reload();
+  </script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devotional</title>
+<style>
+  :root {
+    --accent: #4b3f72;
+    --bg: #f7f5f2;
+    --card: #ffffff;
+    --text: #2b2b2b;
+    --muted: #7a7a7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 0 0 40px 0;
+  }
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 24px 20px 20px 20px;
+    text-align: center;
+  }
+  header .date { font-size: 14px; opacity: 0.85; margin-bottom: 4px; }
+  header .name { font-size: 24px; font-weight: 700; margin: 4px 0; }
+  header .tagline { font-size: 13px; opacity: 0.8; font-style: italic; }
+  .streak-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.15); border-radius: 30px;
+    padding: 8px 20px; margin-top: 14px;
+  }
+  .streak-num { font-size: 28px; font-weight: 800; }
+  .streak-label { font-size: 12px; opacity: 0.85; }
+  .container { max-width: 480px; margin: 0 auto; padding: 20px 16px; }
+  .card { background: var(--card); border-radius: 14px; padding: 18px 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .card h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px 0; }
+  .verse-text { font-style: italic; font-size: 17px; line-height: 1.5; border-left: 3px solid var(--accent); padding-left: 12px; }
+  .devo-text, .prayer-text { font-size: 15px; line-height: 1.6; }
+  .question-text { font-size: 15px; font-style: italic; line-height: 1.5; }
+  .ext-reading { font-size: 14px; color: var(--muted); }
+  .ext-reading strong { color: var(--text); }
+  .complete-row { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+  .complete-row input[type=checkbox] { width: 22px; height: 22px; }
+  .complete-row label { font-size: 15px; }
+  .save-btn { width: 100%; padding: 14px; margin-top: 14px; border: none; border-radius: 10px; background: var(--accent); color: white; font-size: 16px; font-weight: 700; cursor: pointer; }
+  .save-btn:disabled { background: #bbb; }
+  .done-banner { background: #e6f4ea; color: #256029; text-align: center; padding: 12px; border-radius: 10px; font-weight: 600; margin-top: 14px; }
+  .family-btn { display: block; text-align: center; margin: 24px auto 0 auto; max-width: 480px; padding: 14px; border-radius: 10px; background: transparent; border: 2px solid var(--accent); color: var(--accent); font-weight: 700; text-decoration: none; }
+  .loading { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .error-box { color: #a33; text-align: left; padding: 20px; }
+</style>
+</head>
+<body>
+  <div id="app"><div class="loading">Loading today's devotional…</div></div>
+
+  <script>
+    // The person's name comes straight from the URL path, e.g. /Gabriel -> "Gabriel"
+    const PERSON = decodeURIComponent(window.location.pathname.replace(/^\/+/, ''));
+
+    function showError(msg) {
+      document.getElementById('app').innerHTML =
+        '<div class="loading error-box"><strong>Something went wrong:</strong><br><br>' + msg + '<br><br>Send this message to Claude to get it fixed.</div>';
+    }
+
+    function render(day) {
+      const app = document.getElementById('app');
+      app.innerHTML = `
+        <header>
+          <div class="date">${day.todayDate}</div>
+          <div class="name">${PERSON}</div>
+          <div class="streak-badge">
+            <div>
+              <div class="streak-num">${day.streak}</div>
+              <div class="streak-label">day streak</div>
+            </div>
+          </div>
+        </header>
+        <div class="container">
+          <div class="card">
+            <h3>Day ${day.dayNumber} &middot; ${day.verseRef}</h3>
+            <div class="verse-text">${day.verseText}</div>
+          </div>
+          <div class="card"><h3>Devotional</h3><div class="devo-text">${day.devotional}</div></div>
+          <div class="card"><h3>Question</h3><div class="question-text">${day.question}</div></div>
+          <div class="card"><h3>Prayer</h3><div class="prayer-text">${day.prayer}</div></div>
+          <div class="card">
+            <h3>Extended Reading</h3>
+            <div class="ext-reading"><strong>${day.extReading}</strong> — read it in your Bible app, then come back here.</div>
+            ${day.completedToday ? `
+              <div class="done-banner">✓ Done for today — see you tomorrow!</div>
+            ` : `
+              <div class="complete-row">
+                <input type="checkbox" id="doneCheck">
+                <label for="doneCheck">I did my devotional and extended reading today</label>
+              </div>
+              <button class="save-btn" id="saveBtn" disabled>Save</button>
+            `}
+          </div>
+          <a class="family-btn" href="/">Go to Family Page</a>
+        </div>
+      `;
+
+      if (!day.completedToday) {
+        const check = document.getElementById('doneCheck');
+        const btn = document.getElementById('saveBtn');
+        check.addEventListener('change', () => { btn.disabled = !check.checked; });
+        btn.addEventListener('click', () => {
+          btn.disabled = true;
+          btn.textContent = 'Saving…';
+          fetch('/api/complete', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ person: PERSON })
+          })
+            .then(r => r.json())
+            .then(render)
+            .catch(e => showError(e.message));
+        });
+      }
+    }
+
+    fetch('/api/person-day?person=' + encodeURIComponent(PERSON))
+      .then(r => {
+        if (!r.ok) return r.json().then(e => { throw new Error(e.error || 'Request failed'); });
+        return r.json();
+      })
+      .then(render)
+      .catch(e => showError(e.message));
+  </script>
+</body>
+</html>

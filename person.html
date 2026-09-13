@@ -27,7 +27,6 @@
   }
   header .date { font-size: 14px; opacity: 0.85; margin-bottom: 4px; }
   header .name { font-size: 24px; font-weight: 700; margin: 4px 0; }
-  header .tagline { font-size: 13px; opacity: 0.8; font-style: italic; }
   .streak-badge {
     display: inline-flex; align-items: center; gap: 8px;
     background: rgba(255,255,255,0.15); border-radius: 30px;
@@ -58,8 +57,9 @@
   <div id="app"><div class="loading">Loading today's devotional…</div></div>
 
   <script>
-    // The person's name comes straight from the URL path, e.g. /Gabriel -> "Gabriel"
-    const PERSON = decodeURIComponent(window.location.pathname.replace(/^\/+/, ''));
+    // The private token comes from the URL path, e.g. /eSAETRPi -> "eSAETRPi"
+    const TOKEN = decodeURIComponent(window.location.pathname.replace(/^\/+/, ''));
+    let PERSON_NAME = '';
 
     function showError(msg) {
       document.getElementById('app').innerHTML =
@@ -67,11 +67,12 @@
     }
 
     function render(day) {
+      PERSON_NAME = day.personName;
       const app = document.getElementById('app');
       app.innerHTML = `
         <header>
           <div class="date">${day.todayDate}</div>
-          <div class="name">${PERSON}</div>
+          <div class="name">${PERSON_NAME}</div>
           <div class="streak-badge">
             <div>
               <div class="streak-num">${day.streak}</div>
@@ -100,7 +101,7 @@
               <button class="save-btn" id="saveBtn" disabled>Save</button>
             `}
           </div>
-          <a class="family-btn" href="/">Go to Family Page</a>
+          <a class="family-btn" href="/?as=${encodeURIComponent(PERSON_NAME)}">Go to Family Page</a>
         </div>
       `;
 
@@ -114,7 +115,7 @@
           fetch('/api/complete', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ person: PERSON })
+            body: JSON.stringify({ token: TOKEN })
           })
             .then(r => r.json())
             .then(render)
@@ -123,7 +124,7 @@
       }
     }
 
-    fetch('/api/person-day?person=' + encodeURIComponent(PERSON))
+    fetch('/api/person-day?token=' + encodeURIComponent(TOKEN))
       .then(r => {
         if (!r.ok) return r.json().then(e => { throw new Error(e.error || 'Request failed'); });
         return r.json();

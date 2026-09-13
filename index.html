@@ -46,7 +46,19 @@
 
   <script>
     const PEOPLE = ["Dad","Mom","Preston","Jocelyn","Lillie","Lydia","Gabriel","Alexis","Abel"];
-    const KNOWN_AS = new URLSearchParams(window.location.search).get('as');
+
+    // Identity is remembered quietly in this browser tab — never shown in the URL.
+    // (Old-style ?as=Name links still work once, then get cleaned up immediately.)
+    const urlAs = new URLSearchParams(window.location.search).get('as');
+    if (urlAs && PEOPLE.includes(urlAs)) {
+      sessionStorage.setItem('devotionalIdentity', urlAs);
+      history.replaceState(null, '', '/');
+    }
+    const KNOWN_AS = sessionStorage.getItem('devotionalIdentity');
+
+    let showAllPraise = false;
+    let showAllGodMoments = false;
+    let currentData = null;
 
     function personField(id) {
       if (KNOWN_AS && PEOPLE.includes(KNOWN_AS)) {
@@ -62,7 +74,11 @@
     }
 
     function render(data) {
+      currentData = data;
       const app = document.getElementById('app');
+      const visiblePraise = showAllPraise ? data.praiseReports : data.praiseReports.slice(0, 2);
+      const visibleGodMoments = showAllGodMoments ? data.godMoments : data.godMoments.slice(0, 2);
+
       app.innerHTML = `
         <header>
           <div class="title">Our Family</div>
@@ -91,7 +107,7 @@
                 <div class="pr-meta">${pr.requester} &middot; ${pr.dateAdded}</div>
                 <div class="pr-actions">
                   <button onclick="pray('${pr.id}')">🙏 I'm praying</button>
-                  <button onclick="resolvePR('${pr.id}')">No longer needed</button>
+                  ${KNOWN_AS === pr.requester ? `<button onclick="resolvePR('${pr.id}')">No longer needed</button>` : ''}
                 </div>
                 ${pr.prayingNames.length ? `<div class="praying-list">Praying: ${pr.prayingNames.join(', ')}</div>` : ''}
               </div>
@@ -108,12 +124,13 @@
 
           <div class="card">
             <h3>Praise Reports</h3>
-            ${data.praiseReports.length ? data.praiseReports.map(p => `
+            ${visiblePraise.length ? visiblePraise.map(p => `
               <div class="item">
                 <div class="who">${p.name} &middot; <span style="font-weight:400;color:var(--muted)">${p.dateAdded}</span></div>
                 <div class="txt">${p.text}</div>
               </div>
             `).join('') : '<div class="empty">No praise reports yet.</div>'}
+            ${data.praiseReports.length > 2 ? `<span class="archive-toggle" onclick="togglePraise()">${showAllPraise ? 'Show fewer' : `See all ${data.praiseReports.length} praise reports`}</span>` : ''}
 
             <div class="form-row">
               ${personField('przPerson')}
@@ -124,26 +141,31 @@
 
           <div class="card">
             <h3>God Moments</h3>
-            ${data.godMoments.length ? data.godMoments.map(g => `
+            ${visibleGodMoments.length ? visibleGodMoments.map(g => `
               <div class="item">
                 <div class="who">${g.name} &middot; <span style="font-weight:400;color:var(--muted)">${g.dateAdded}</span></div>
                 ${g.text ? `<div class="txt">${g.text}</div>` : ''}
                 ${g.mediaType === 'photo' ? `<img src="${g.mediaUrl}">` : ''}
                 ${g.mediaType === 'audio' ? `<audio controls src="${g.mediaUrl}"></audio>` : ''}
+                ${g.mediaType === 'video' ? `<video controls src="${g.mediaUrl}" style="width:100%;border-radius:8px;margin-top:8px"></video>` : ''}
               </div>
             `).join('') : '<div class="empty">No God moments shared yet.</div>'}
+            ${data.godMoments.length > 2 ? `<span class="archive-toggle" onclick="toggleGodMoments()">${showAllGodMoments ? 'Show fewer' : `See all ${data.godMoments.length} God moments`}</span>` : ''}
 
             <div class="form-row">
               ${personField('gmPerson')}
-              <textarea id="gmText" rows="2" placeholder="What did God show you today? (optional if attaching photo/audio)"></textarea>
-              <input type="file" id="gmFile" accept="image/*,audio/*" style="margin-top:8px">
-              <div style="font-size:11px;color:var(--muted);margin-top:4px">Photos/audio must be under ~800KB.</div>
+              <textarea id="gmText" rows="2" placeholder="What did God show you today? (optional if attaching photo/audio/video)"></textarea>
+              <input type="file" id="gmFile" accept="image/*,audio/*,video/*" style="margin-top:8px">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Photos/audio up to 15MB, video up to 25MB (keep clips under ~20 seconds).</div>
               <button class="submit-btn" onclick="submitGodMoment()">Share God Moment</button>
             </div>
           </div>
         </div>
       `;
     }
+
+    function togglePraise() { showAllPraise = !showAllPraise; render(currentData); }
+    function toggleGodMoments() { showAllGodMoments = !showAllGodMoments; render(currentData); }
 
     function reload() {
       fetch('/api/family-data')
@@ -153,7 +175,7 @@
     }
 
     function pray(id) {
-      const person = prompt("Who's praying? (enter your name)");
+      const person = (KNOWN_AS && PEOPLE.includes(KNOWN_AS)) ? KNOWN_AS : prompt("Who's praying? (enter your name)");
       if (!person) return;
       fetch('/api/prayer-pray', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -212,7 +234,7 @@
       const reader = new FileReader();
       reader.onload = function() {
         const base64 = reader.result.split(',')[1];
-        const mediaType = file.type.startsWith('image') ? 'photo' : 'audio';
+        const mediaType = file.type.startsWith('image') ? 'photo' : file.type.startsWith('video') ? 'video' : 'audio';
         post(base64, file.type, mediaType);
       };
       reader.readAsDataURL(file);

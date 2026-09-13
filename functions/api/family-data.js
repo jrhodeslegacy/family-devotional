@@ -1,17 +1,32 @@
 // functions/api/family-data.js
 // GET /api/family-data
 
+function centralDateStr(d) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
+}
+function todayStr() { return centralDateStr(new Date()); }
+function yesterdayStr() { return centralDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000)); }
+
 export async function onRequestGet(context) {
   const { env } = context;
 
   const peopleResult = await env.DB.prepare(
-    'SELECT name, streak, total_completed FROM people ORDER BY name'
+    'SELECT name, streak, total_completed, last_completed FROM people ORDER BY name'
   ).all();
-  const people = peopleResult.results.map(p => ({
-    name: p.name,
-    streak: p.streak,
-    total: p.total_completed
-  }));
+  const today = todayStr();
+  const yesterday = yesterdayStr();
+  const people = peopleResult.results.map(p => {
+    // If their last completion wasn't today or yesterday, the streak is
+    // effectively broken — show 0 immediately rather than a stale number.
+    const streakStillAlive = p.last_completed === today || p.last_completed === yesterday;
+    return {
+      name: p.name,
+      streak: streakStillAlive ? p.streak : 0,
+      total: p.total_completed
+    };
+  });
   const familyActiveToday = people.filter(p => p.streak > 0).length;
 
   const prResult = await env.DB.prepare(

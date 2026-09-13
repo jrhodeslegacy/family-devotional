@@ -46,6 +46,15 @@
 
   <script>
     const PEOPLE = ["Dad","Mom","Preston","Jocelyn","Lillie","Lydia","Gabriel","Alexis","Abel"];
+    const KNOWN_AS = new URLSearchParams(window.location.search).get('as');
+
+    function personField(id) {
+      if (KNOWN_AS && PEOPLE.includes(KNOWN_AS)) {
+        return `<div style="font-size:14px;margin-bottom:8px;">Posting as <strong>${KNOWN_AS}</strong></div>
+                <input type="hidden" id="${id}" value="${KNOWN_AS}">`;
+      }
+      return `<select id="${id}">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>`;
+    }
 
     function showError(msg) {
       document.getElementById('app').innerHTML =
@@ -89,7 +98,7 @@
             `).join('') : '<div class="empty">No active prayer requests right now.</div>'}
 
             <div class="form-row">
-              <select id="prPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              ${personField('prPerson')}
               <textarea id="prText" rows="2" placeholder="Add a prayer request..."></textarea>
               <button class="submit-btn" onclick="submitPR()">Add Prayer Request</button>
             </div>
@@ -107,7 +116,7 @@
             `).join('') : '<div class="empty">No praise reports yet.</div>'}
 
             <div class="form-row">
-              <select id="przPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              ${personField('przPerson')}
               <textarea id="przText" rows="2" placeholder="Share a praise report..."></textarea>
               <button class="submit-btn" onclick="submitPraise()">Add Praise Report</button>
             </div>
@@ -125,7 +134,7 @@
             `).join('') : '<div class="empty">No God moments shared yet.</div>'}
 
             <div class="form-row">
-              <select id="gmPerson">${PEOPLE.map(p => `<option>${p}</option>`).join('')}</select>
+              ${personField('gmPerson')}
               <textarea id="gmText" rows="2" placeholder="What did God show you today? (optional if attaching photo/audio)"></textarea>
               <input type="file" id="gmFile" accept="image/*,audio/*" style="margin-top:8px">
               <div style="font-size:11px;color:var(--muted);margin-top:4px">Photos/audio must be under ~800KB.</div>

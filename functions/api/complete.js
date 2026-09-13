@@ -1,31 +1,32 @@
 // functions/api/complete.js
-// POST /api/complete   body: { "person": "Gabriel" }
+// POST /api/complete   body: { "token": "eSAETRPi" }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
+function centralDateStr(d) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
 }
+function todayStr() { return centralDateStr(new Date()); }
 function yesterdayStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return centralDateStr(new Date(Date.now() - 24 * 60 * 60 * 1000));
 }
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const { person } = await request.json();
+  const { token } = await request.json();
 
   const personRow = await env.DB.prepare(
-    'SELECT * FROM people WHERE name = ?'
-  ).bind(person).first();
+    'SELECT * FROM people WHERE token = ?'
+  ).bind(token).first();
 
   if (!personRow) {
-    return new Response(JSON.stringify({ error: 'Unknown person: ' + person }), { status: 404 });
+    return new Response(JSON.stringify({ error: 'Invalid link' }), { status: 404 });
   }
 
+  const person = personRow.name;
   const today = todayStr();
 
   if (personRow.last_completed === today) {
-    // Already completed today, no double counting — just return current state.
     return getCurrentDay(env, person, personRow);
   }
 
@@ -54,6 +55,7 @@ async function getCurrentDay(env, person, personRow) {
   ).bind(person, dayIndex).first();
 
   return new Response(JSON.stringify({
+    personName: person,
     dayNumber: dayIndex,
     verseRef: day.ref,
     verseText: day.passage,
@@ -64,6 +66,6 @@ async function getCurrentDay(env, person, personRow) {
     completedToday: true,
     streak: personRow.streak,
     totalCompleted: personRow.total_completed,
-    todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago' })
   }), { headers: { 'content-type': 'application/json' } });
 }

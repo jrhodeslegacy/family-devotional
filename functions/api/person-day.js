@@ -1,26 +1,32 @@
 // functions/api/person-day.js
-// GET /api/person-day?person=Gabriel
+// GET /api/person-day?token=eSAETRPi
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+function centralDateStr(d) {
+  // Formats a date as YYYY-MM-DD in America/Chicago time (handles CST/CDT automatically)
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(d);
 }
+function todayStr() { return centralDateStr(new Date()); }
 
 export async function onRequestGet(context) {
   const { request, env } = context;
   const url = new URL(request.url);
-  const person = url.searchParams.get('person');
+  const token = url.searchParams.get('token');
 
-  if (!person) {
-    return new Response(JSON.stringify({ error: 'Missing person parameter' }), { status: 400 });
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Missing token' }), { status: 400 });
   }
 
   const personRow = await env.DB.prepare(
-    'SELECT * FROM people WHERE name = ?'
-  ).bind(person).first();
+    'SELECT * FROM people WHERE token = ?'
+  ).bind(token).first();
 
   if (!personRow) {
-    return new Response(JSON.stringify({ error: 'Unknown person: ' + person }), { status: 404 });
+    return new Response(JSON.stringify({ error: 'Invalid link' }), { status: 404 });
   }
+
+  const person = personRow.name;
 
   const countRow = await env.DB.prepare(
     'SELECT COUNT(*) as c FROM devotional_days WHERE person = ?'
@@ -36,6 +42,7 @@ export async function onRequestGet(context) {
   const completedToday = personRow.last_completed === todayStr();
 
   return new Response(JSON.stringify({
+    personName: person,
     dayNumber: dayIndex,
     verseRef: day.ref,
     verseText: day.passage,
@@ -46,6 +53,6 @@ export async function onRequestGet(context) {
     completedToday,
     streak: personRow.streak,
     totalCompleted: personRow.total_completed,
-    todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    todayDate: new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'America/Chicago' })
   }), { headers: { 'content-type': 'application/json' } });
 }

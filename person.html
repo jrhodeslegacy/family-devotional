@@ -2,6 +2,8 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="apple-touch-icon" href="/icon_512.png">
+<link rel="icon" type="image/png" href="/icon_512.png">
 <title>Devotional</title>
 <style>
   :root {
@@ -101,7 +103,7 @@
               <button class="save-btn" id="saveBtn" disabled>Save</button>
             `}
           </div>
-          <a class="family-btn" href="/?as=${encodeURIComponent(PERSON_NAME)}">Go to Family Page</a>
+          <a class="family-btn" href="/" onclick='sessionStorage.setItem("devotionalIdentity", ${JSON.stringify(PERSON_NAME)})'>Go to Family Page</a>
         </div>
       `;
 
